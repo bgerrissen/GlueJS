@@ -1,11 +1,7 @@
 /** @author Ben Gerrissen
  *  @license MIT, GPL
- *  @version 0.1 ( 31 - 10 - 2010 )
- *
- * 
- * 
+ *  @version 0.2 ( 1 - 11 - 2010 )
  */
-
 (function( global , doc ){
 
     // constants, tiny minification boost and no need to write quotes.
@@ -13,12 +9,17 @@
     , ARRAY = "array"
     , STRING = "string"
     , OBJECT = "object"
-    , REGEXP = "regexp"
     , BOOLEAN = "boolean"
+    , FAILED = -1
+    , NEW = 0
+    , LOADING = 1
+    , PENDING = 2
+    , COMPLETE = 3
 
     , UID = +new Date()
 
     // utilities
+
     , slice = Array.prototype.slice
     , toTypeString = Object.prototype.toString
     , type = function ( obj ) {
@@ -74,7 +75,9 @@
 
     }
 
-    // event engine
+    /**Event engine
+     *
+     */
     , eventRegistry = {}
     , listen = function ( eventType , listener ) {
 
@@ -92,11 +95,11 @@
         var list = eventRegistry[ eventType ]
         , i;
 
-        if ( eventRegistry[ eventType ] ) {
+        if ( list ) {
 
             i = list.length;
 
-            while ( i-- ) {
+            while ( i && i-- ) {
 
                 if ( list[ i ] === listener ) {
 
@@ -126,7 +129,7 @@
                 type : eventType,
                 deafen : function () {
 
-                    deafen( eventType , this.currentListener );
+                    deafen( eventType , eventObject.currentListener );
 
                 }
             } , data , false );
@@ -163,31 +166,35 @@
 
     }
 
-    // used to store public objects
+    /**Public domain
+     *
+     */
     , publicSettings = {}
     , set = function ( varName , varValue ) {
 
-        var args = arguments
-        , objType = type( args[ 0 ] );
+        var objType = type( arguments[ 0 ] );
 
-        if ( args.length === 1 && objType === OBJECT ) {
+        if ( arguments.length === 1 && objType === OBJECT ) {
 
-            mixin( publicSettings , args[ 0 ] , true );
+            mixin( publicSettings , arguments[ 0 ] , true );
 
         } else if ( objType === STRING ) {
 
-            publicSettings[ args[ 0 ] ] = args[ 1 ];
+            publicSettings[ arguments[ 0 ] ] = arguments[ 1 ];
 
         }
 
     }
+
     , get = function ( varName ) {
 
         return publicSettings[ varName ];
 
     }
 
-    //glue expressions, keeping it small for now
+    /** Glue Expressions
+     *
+     */
     , regExp = /([^\s]*)(?:\s?\(([^\)]+)\))?/
     , parse = function ( obj ) {
 
@@ -216,219 +223,40 @@
 
     }
 
-    // module management
-    , registry = {}
-    , pending = {}
-    , insertStack = []
-    , filter = function ( list ) {
-
-        var missing = []
-        , i = list.length
-        , path
-        , record;
-
-        while ( i-- ) {
-
-            path = list[ i ].path;
-            record = registry[ path ];
-
-            if ( path && ( !record || !record.ready ) ) {
-
-                missing.push( list[ i ] );
-
-            }
-
-        }
-
-        return missing;
-
-    }
-    , register = function ( record ) {
-
-        if ( record.path && !registry[ record.path ] ) {
-
-            registry[ record.path ] = record;
-
-            if ( record.fetch && record.fetch.length ) {
-
-                record.ready = false;
-
-                listen( "glue:complete" , function ( e ) {
-
-                    record.fetch = filter( record.fetch );
-
-                    if ( !record.fetch.length ) {
-
-                        e.deafen();
-                        complete( record );
-
-                    }
-
-                } );
-
-                load( record.fetch );
-
-            } else {
-
-                complete( record );
-
-            }
-
-        } else {
-
-            insertStack.push( record );
-
-        }
-
-    }
-    , getImports = function ( needs ) {
-
-        var i = needs.length
-        , resource
-        , imports = [];
-
-        while ( i-- ) {
-
-            resource = needs[ i ];
-            imports = [].concat( imports , registry[ resource.path ].exports );
-
-        }
-
-        return imports;
-
-    }
-    , complete = function ( record ) {
-
-        if ( !record ) {
-
-            return;
-
-        }
-
-        if ( record.needs.length ) {
-
-            record.imports = getImports( record.needs );
-
-        }
-
-        if ( record.callback ) {
-
-            try {
-
-                record.exports = record.callback.apply( null , record.imports );
-
-            } catch ( e ) {
-
-                notify( "glue:error" , {
-                    message : e
-                } );
-
-            }
-        }
-
-        delete record.imports;
-        delete record.callback;
-        delete record.fetch;
-        delete record.needs;
-
-        record.ready = true;
-
-        notify( "glue:complete" , {
-
-            path : record.path,
-            exports : record.exports
-
-        } );
-
-    }
-    , resolve = function ( e ) {
-
-        var record
-        , i
-        , objName;
-
-        if ( insertStack.length === 1 && e.path ) {
-
-            record = insertStack.pop();
-            record.path = e.path;
-
-        } else if ( e.lookup ) {
-
-            i = e.lookup.length;
-            record = {
-                path : e.path,
-                exports : [],
-                needs : []
-            };
-
-            while ( i-- ) {
-
-                objName = e.lookup[ i ];
-
-                record.exports[ i ] = global[ objName ];
-
-                if ( publicSettings.cleanGlobal ) {
-
-                    delete global[ objName ];
-
-                }
-
-            }
-
-        }
-
-        if ( record ) {
-
-            register( record );
-
-        }
-
-        insertStack = [];
-
-    }
-
-    // path resolving
+    /**Path resolving
+     *
+     */
     , forced = {}
     , force = function ( originalPath , forcedPath ) {
 
         forced[ originalPath ] = forcedPath;
 
     }
-    , finalFormat = function ( obj ) {
+    , finalExpr = function ( glueExp ) {
 
-        if ( forced[ obj.path ] ) {
+        var hash = {}
+        , path = parse( glueExp ).path
+        , newExp = glueExp;
 
-            return finalFormat( parse( forced[ obj.path ] ) );
+        while ( forced[ path ] ) {
 
-        }
+            if ( hash[ path ] ) {
 
-        return obj;
+                notify( "glue:error" , {
+                    message : "CircularReferenceError: forced path '" + glueExp + "' lead to a cirular reference, operation cancelled."
+                } );
 
-    }
-    , format = function ( list ) {
-
-        var i = list.length
-        , obj;
-
-        while ( i-- ) {
-
-            obj = parse( list[ i ] );
-
-            if ( obj.path ) {
-
-                obj = list[ i ] = finalFormat( obj );
-                obj.src = getSource( obj.path );
-
-            } else {
-
-                // useless bullshit!
-                list.splice( i , 1 );
+                return glueExp;
 
             }
 
+            newExp = forced[ path ];
+            path = parse( newExp ).path;
+            hash[ path ] = true;
+
         }
 
-        return list;
+        return newExp;
 
     }
     , getSource = function ( path ) {
@@ -472,7 +300,213 @@
 
     }
 
-    // script loading
+    /** Module management
+     *
+     */
+    , registry = {}
+    , insertStack = []
+    , getRecord = function ( glueExp ) {
+
+        glueExp = parse( glueExp );
+
+        if ( !glueExp.path ) {
+
+            return null;
+
+        }
+
+        if ( registry[ glueExp.path ] ) {
+
+            return registry[ glueExp.path ];
+
+        }
+
+        return registry[ glueExp.path ] = mixin( {
+            status : NEW,
+            needs : [],
+            fetch : [],
+            exports : [],
+            source : getSource( glueExp.path ),
+            data : glueExp
+        } , glueExp );
+
+    }
+    , cleanRecord = function ( record ) {
+
+        delete record.data;
+        delete record.needs;
+        delete record.fetch;
+        delete record.source;
+        delete record.imports;
+        delete record.node;
+        delete record.callback;
+
+    }
+    , filter = function ( list ) {
+
+        var missing = []
+        , i = list.length;
+
+        while ( i && i-- ) {
+
+            if ( list[ i ].status !== COMPLETE ) {
+
+                missing.push( list[ i ] );
+
+            }
+
+        }
+
+        return missing;
+
+    }
+    , format = function ( list ) {
+
+        var i = list.length
+        , parsed;
+
+        while ( i && i-- ) {
+
+            parsed = parse( finalExpr( list[ i ] ) );
+
+            if ( parsed.path ) {
+
+                list[ i ] = getRecord( parsed );
+
+            } else {
+
+                list.splice( i , 1 );
+
+            }
+
+        }
+
+        return list;
+
+    }
+    , resolve = function ( e ) {
+
+        var record = getRecord( e.path )
+        , data = insertStack.pop()
+        , i
+        , name;
+
+        if ( !record ) {
+
+            return;
+
+        }
+
+        if ( data ) {
+
+            mixin( record , data , true );
+
+        } else if ( e.lookup ) {
+
+            i = e.lookup.length;
+
+            while ( i && i-- ) {
+
+                name = e.lookup[ i ];
+
+                record.exports[ i ] = global[ name ];
+
+                if ( publicSettings.cleanGlobal ) {
+
+                    delete global[ name ];
+
+                }
+
+            }
+
+        }
+
+        if ( !record.fetch.length ) {
+
+            complete( record );
+
+        } else {
+
+            record.status = PENDING;
+
+            listen( "glue:complete" , function ( e ) {
+
+                record.fetch = filter( record.fetch );
+
+                if ( !record.fetch.length && record.status !== 3 ) {
+
+                    e.deafen();
+
+                    complete( record );
+
+                }
+
+            } );
+
+        }
+
+        insertStack = [];
+
+
+    }
+    , complete = function ( record ) {
+
+        if ( !record ) {
+
+            return;
+
+        }
+
+        if ( record.needs.length ) {
+
+            record.imports = getImports( record.needs );
+
+        }
+
+        if ( record.callback ) {
+
+            try {
+
+                record.exports.push( record.callback.apply( null , record.imports ) );
+
+            } catch ( e ) {
+
+                notify( "glue:error" , {
+                    message : e
+                } );
+
+            }
+
+        }
+
+        record.status = COMPLETE;
+
+        cleanRecord( record );
+
+        notify( "glue:complete" , {
+            path : record.path,
+            exports : record.exports
+        } );
+
+    }
+    , getImports = function ( list ) {
+
+        var i = list.length
+        , imports = [];
+
+        while ( i && i-- ) {
+
+            imports = [].concat( imports , list[ i ].exports );
+
+        }
+
+        return imports;
+
+    }
+
+    /**Script loader
+     *
+     */
     , scripts = doc.getElementsByTagName( "script" )
     , scriptNode = doc.createElement( "script" )
     , scriptAnchor = scripts[ scripts.length - 1 ]
@@ -481,27 +515,31 @@
 
         if ( list && list.length ) {
 
-            scriptAnchor.parentNode.insertBefore( appendNodes( list , doc.createDocumentFragment() ) , scriptAnchor );
+            scriptAnchor.parentNode.insertBefore(
+                appendNodes( list , doc.createDocumentFragment() ) ,
+                scriptAnchor
+            );
 
         }
+
     }
     , appendNodes = function ( list , fragment ) {
 
         var i = list.length
         , node
-        , obj;
+        , record;
 
-        while ( i-- ) {
+        while ( i && i-- ) {
 
-            obj = list[ i ];
+            record = list[ i ];
 
-            if ( !pending[ obj.path ] ) {
+            if ( record.status === NEW ) {
 
-                node = setNode( obj , fragment );
+                node = setNode( record , fragment );
 
             }
 
-            pending[ obj.path ] = true;
+            record.status = LOADING;
 
         }
 
@@ -510,36 +548,35 @@
         return fragment;
 
     }
-    , startTimeout = function( obj ) {
+    , startTimeout = function( record ) {
 
-        obj.timeoutID = setTimeout( function () {
+        record.timeoutID = setTimeout( function () {
 
-            fail( obj );
+            fail( record );
 
         } , publicSettings.scriptTimeout );
 
     }
-    , fail = function( obj ) {
+    , fail = function( record ) {
 
-        delete pending[ obj.path ];
+        record.status = FAILED;
 
         notify( "glue:error" , {
-            message : "LoadError: Failed to load resource '"+obj.src+"'"
+            message : "LoadError: Failed to load resource '"+record.path+"' at '"+record.source+"'"
         } );
 
     }
-    , setNode = function ( obj , fragment ) {
+    , setNode = function ( record , fragment ) {
 
-        var objData = mixin( {} , obj )
-        , node = obj.node = scriptNode.cloneNode( false );
+        var node = record.node = scriptNode.cloneNode( false );
 
-        node.src = obj.src;
+        node.src = record.source;
 
         fragment.appendChild( node );
 
         var listener = function () {
 
-            var node = obj.node;
+            var node = record.node;
 
             if ( !node.readyState || /complete|loaded/i.test( node.readyState ) ) {
 
@@ -549,13 +586,11 @@
 
                 }
 
-                obj.node = node.onreadystatechange = node.onload = null;
+                record.node = node.onreadystatechange = node.onload = null;
 
-                delete pending[ obj.path ];
+                notify( "glue:loaded" , record.data );
 
-                notify( "glue:loaded" , objData );
-
-                clearTimeout( obj.timeoutID );
+                clearTimeout( record.timeoutID );
 
             }
 
@@ -567,13 +602,13 @@
 
         node = null;
 
-        startTimeout( obj );
+        startTimeout( record );
 
-        notify( "glue:loading" , objData );
+        notify( "glue:loading" , record.data );
 
     }
 
-    // bundles
+    /*
     , manifest = {}
     , fullNeeds = function ( list ) {
 
@@ -586,7 +621,7 @@
             return result;
 
         }
-        
+
         i = list.length;
 
         while ( i-- ) {
@@ -654,16 +689,20 @@
         // todo: remove duplicates, can leave it for now.
 
     }
+    */
 
-    , createRecordFromArguments = function ( args ) {
+    /**Glue implementation
+     *
+     */
+    , formatArguments = function ( args ) {
 
-        var record = {}
+        var data = {}
         , needs = []
         , i = args.length
         , obj
         , objType;
 
-        while ( i-- ) {
+        while ( i && i-- ) {
 
             obj = args[ i ];
             objType = type( obj );
@@ -678,59 +717,56 @@
 
             } else if ( objType === FUNCTION ) {
 
-                record.callback = obj;
+                data.callback = obj;
 
             }
 
         }
 
-        record.needs = format( needs );
-        record.fetch = filter( needs );
+        data.needs = format( needs );
+        data.fetch = filter( needs );
 
-        return record;
+        return data;
 
     }
 
-    // TEH GLUE
-    , glue = function ( /* [ needs* , ] callback */) {
+    , glue = function ( /* [ needs* ] [ , callback ] */ ) {
 
-        var record = createRecordFromArguments( arguments );
+        var data = formatArguments( arguments );
 
-        if ( record.callback ) {
+        insertStack.push( data );
 
-            register( record );
+        if ( data.fetch ) {
 
-        } else {
-
-            load( record.fetch );
+            load( data.fetch );
 
         }
 
     }
     , use = function ( /* [ needs* , ] , callback*/ ){
 
-        var record = createRecordFromArguments( arguments );
+        var data = formatArguments( arguments );
 
-        if ( record.fetch.length ) {
+        if ( data.fetch.length ) {
 
             listen( "glue:complete" , function ( e ) {
 
-                record.fetch = filter( record.fetch );
+                data.fetch = filter( data.fetch );
 
-                if ( !record.fetch.length ) {
+                if ( !data.fetch.length ) {
 
                     e.deafen();
-                    record.callback.apply( null , getImports( record.needs ) );
+                    data.callback.apply( null , getImports( data.needs ) );
 
                 }
 
             } );
 
-            load( record.fetch );
+            load( data.fetch );
 
         } else {
 
-            record.callback.apply( null , getImports( record.needs ) );
+            data.callback.apply( null , getImports( data.needs ) );
 
         }
 
@@ -750,12 +786,10 @@
     glue.get = get;
     glue.use = use;
     glue.force = force;
-    // glue.bundle = addBundle; // not ready yet
     glue.listen = listen;
     glue.deafen = deafen;
     glue.notify = notify;
 
     global.glue = glue;
 
-
-}( this , document ));
+}( window , document ));
