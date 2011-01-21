@@ -38,15 +38,115 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
 (function ( global , doc , undefined ) {
 
-    var config = {
+    var toolkit = {
 
-        jqueryUrl : "https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js" ,
+        JQUERY : "jquery",
+        PROTOTYPE : "prototype",
+        MOOTOOLS : "mootools",
+        DOJO : "dojo"
+
+    }
+
+    , toolkitUrl = {
+
+        jquery : "https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js",
+        prototype : "https://ajax.googleapis.com/ajax/libs/prototype/1.7.0.0/prototype.js",
+        mootools : "https://ajax.googleapis.com/ajax/libs/mootools/1.3.0/mootools-yui-compressed.js",
+        dojo : "https://ajax.googleapis.com/ajax/libs/dojo/1.5/dojo/dojo.xd.js"
+
+    }
+
+    , config = {
+
+        toolkit : toolkit.JQUERY,
         baseUrlMatch : /(?:\\|\/)glue(?:[^\\\/]+)?\.js/
 
     }
 
+    , adapter = {
+        jquery : {
+            find : function ( expr ) {
+                return jQuery( expr );
+            },
+            node : function( node ){
+                return jQuery( node );
+            },
+            listen : function ( obj , eventType , listener ) {
+                return obj.bind( eventType , listener );
+            },
+            deafen : function ( obj , eventType , listener ) {
+                return obj.unbind( eventType , listener );
+            }
+        },
+        prototype : {
+            find : function ( expr ) {
+                return $$( expr );
+            },
+            node : function ( node ) {
+                return [ node ];
+            },
+            listen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    $A( obj ).invoke( "observe" , evt , listener );
+                } );
+                return obj;
+            },
+            deafen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    $A( obj ).invoke( "stopObserving" , evt , listener );
+                } );
+                return obj;
+            }
+        },
+        mootools : {
+            find : function ( expr ) {
+                return $$( expr );
+            },
+            node : function ( node ) {
+                return $$( node );
+            },
+            listen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    obj.addEvent( evt , listener );
+                } );
+                return obj;
+            },
+            deafen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    obj.removeEvent( evt , listener );
+                } );
+                return obj;
+            }
+        },
+        dojo : {
+            find : function ( expr ) {
+                return dojo.query( expr );
+            },
+            node : function ( obj ) {
+                return new dojo.NodeList( obj );
+            },
+            listen : function ( obj , eventType , listener ) {
+                dojo.forEach( eventType.split( /\s+/ ) , function ( evt ) {
+                    obj.forEach( function ( node ) {
+                        dojo.connect( node , evt , listener );
+                    } );
+                } );
+            },
+            deafen : function ( obj , eventType , listener ) {
+                dojo.forEach( eventType.split( /\s+/ ) , function ( evt ) {
+                    obj.forEach( function ( node ) {
+                        dojo.disconnect( [ node , evt , listener , 1 ] );
+                    } );
+                } );
+            }
+        }
+    }
+
     , isBrowser = !!doc
     , isDomReady
+    , isToolkitLoaded
+    , isToolkitLoading
+    , tool
 
     , idReg = /^#/
 
@@ -54,14 +154,32 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     , queue = []
 
-    , $ = global.jQuery
+    , getToolkit = function(){
+
+        isToolkitLoading = true;
+
+        require( [].concat( config.toolkitUrl ) , function () {
+
+            tool = adapter[ config.toolkit ];
+            isToolkitLoaded = true;
+            glue.apply( null , queue );
+
+        } );
+
+    }
 
     , glue = global.glue = function () {
 
         var i = 0
         , len = arguments.length;
 
-        if ( isBrowser && !$ ) {
+        if ( !isToolkitLoading && !isToolkitLoaded ) {
+            
+            getToolkit();
+
+        }
+
+        if ( isBrowser && !isToolkitLoaded ) {
 
             queue = queue.concat( slice.call( arguments ) );
             return;
@@ -110,19 +228,21 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     , isLazy = function ( command ) {
 
-        if ( shelved[ command.as ] ) {
+        // if already shelved, then it's time to stop being lazy. 
+        if ( shelved[ command.id ] ) {
 
             return false;
 
         }
 
-        return command.lazy || ( !( "create" in command ) && !( "invoke" in command ) );
+        // everything is lazy unless explicitly defined.
+        return command.lazy !== false;
 
     }
 
     , shelf = function ( command ) {
         
-        shelved[ command.as ] = command;
+        shelved[ command.id ] = command;
 
     }
 
@@ -273,7 +393,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
             return require.ready( function() {
 
-                command.find = $( command.find );
+                command.find = tool.find( command.find );
 
                 if ( command.find.length ) {
 
@@ -292,13 +412,15 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
                 if ( command.each !== false ) {
 
                     var c = clone( command );
-                    c.find = $( this ).unbind( command.on , command.listener );
+                    c.find = tool.node( this );
+                    tool.deafen( c.find , command.on , command.listener );
                     c.on = null;
+
                     resolve( c , false );
 
                 } else {
 
-                    command.find.unbind( command.on , command.listener );
+                    tool.deafen( c.find , command.on , command.listener );
                     command.on = null;
                     resolve( command , false );
 
@@ -306,11 +428,11 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
             };
 
-            return command.find.bind( command.on , command.listener );
+            return tool.listen( command.find , command.on , command.listener );
 
         }
 
-        if ( typeof command.as == "string" && isLazy( command ) ) {
+        if ( typeof command.id == "string" && isLazy( command ) ) {
 
             return shelf( command );
 
@@ -322,11 +444,11 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         }
 
-        if ( typeof command.source == "string" ) {
+        if ( typeof command.src == "string" ) {
 
-            if ( idReg.test( command.source ) ) {
+            if ( idReg.test( command.src ) ) {
 
-                return onStore( command.source.replace( idReg , "" ) , function ( obj ) {
+                return onStore( command.src.replace( idReg , "" ) , function ( obj ) {
 
                     execute( command , obj );
 
@@ -334,7 +456,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
             }
 
-            require( [ command.source ] , function ( obj ) {
+            require( [ command.src ] , function ( obj ) {
 
                 execute( command , obj );
 
@@ -377,7 +499,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
             return command.find.each( function () {
 
                 var c = clone( command );
-                c.find = $( this );
+                c.find = tool.find( this );
                 execute( c , obj );
 
             } );
@@ -413,9 +535,9 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         }
 
-        if ( typeof command.as == "string" ) {
+        if ( typeof command.id == "string" ) {
 
-            store( command.as , obj );
+            store( command.id , obj );
 
         }
 
@@ -452,7 +574,14 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
             config.load         = node.getAttribute( "data-load" );
             config.debug        = node.getAttribute( "data-debug" );
             config.baseUrl      = node.getAttribute( "data-baseUrl" );
-            config.jqueryUrl    = node.getAttribute( "data-jqueryUrl" ) || config.jqueryUrl;
+            config.toolkit      = node.getAttribute( "data-toolkit" );
+            config.toolkitUrl   = node.getAttribute( "data-jqueryUrl" );
+
+            if ( !config.toolkitUrl ) {
+
+                config.toolkitUrl = toolkitUrl[ config.toolkit ];
+
+            }
 
             if ( config.cacheKey ) {
 
@@ -480,15 +609,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     }
 
-    if ( isBrowser && !$ ) {
-
-        require( [ config.jqueryUrl ] , function () {
-
-            $ = global.jQuery;
-
-            glue.apply( null , queue );
-
-        } );
+    if ( isBrowser ) {
 
         require.ready( function () {
 
@@ -497,6 +618,10 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
         } );
 
     }
+
+    glue.toolkit = toolkit;
+    glue.toolkitUrl = toolkitUrl;
+    glue.adapter = glue.adapter;
 
 
 

@@ -4,15 +4,15 @@ require({
 
 glue(
 
-    { lazy : true , source : "mock/mock2", as : "mock2" },
-    { lazy : true , source : "mock/mock1", create : {} , as : "mock1" , inject : {
+    { lazy: false, src : "mock/mock2", id : "mock2" },
+    { src : "mock/mock1", create : {} , id : "mock1" , inject : {
         dependency : "#mock2"
     } },
 
     {
         find : ".hoverMe",
         on : "mouseout click",
-        source : "#mock1", // require module
+        src : "#mock1", // require module
         create : {}, // value passed to constructor method.
         invoke : [
             { speak : [ "hello world!" ] },
