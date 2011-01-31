@@ -5,14 +5,16 @@ require({
 glue(
 
     { lazy: false, src : "mock/mock2", id : "mock2" },
+
     { src : "mock/mock1", create : {} , id : "mock1" , inject : {
         dependency : "#mock2"
     } },
 
     {
         find : ".hoverMe",
-        on : "mouseout click",
+        on : "click",
         src : "#mock1", // require module
+        createEach : true,
         create : {}, // value passed to constructor method.
         invoke : [
             { speak : [ "hello world!" ] },

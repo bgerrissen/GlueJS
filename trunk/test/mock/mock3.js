@@ -4,7 +4,7 @@ define( function () {
 
         if ( this.$elements && this.$elements.length ) {
 
-            console.log( "setNodeCollection injected a jQuery collection" );
+            console.log( "setNodeList injected a jQuery collection" );
 
         }
 
@@ -26,9 +26,9 @@ define( function () {
 
     CLASS.prototype = {
 
-        setNodeCollection : function ( collection ) {
+        setNodeList : function ( list ) {
     
-            this.$elements = collection;
+            this.$elements = list;
 
         }
 

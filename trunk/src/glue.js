@@ -156,6 +156,12 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     , getToolkit = function(){
 
+        if ( !config.toolkitUrl ) {
+
+            throw "No CDN present for " + config.toolkit + ", requires manual 'data-toolkitUrl' setting on script tag.";
+
+        }
+
         isToolkitLoading = true;
 
         require( [].concat( config.toolkitUrl ) , function () {
@@ -409,7 +415,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
             command.listener = function () {
 
-                if ( command.each !== false ) {
+                if ( command.createEach ) {
 
                     var c = clone( command );
                     c.find = tool.node( this );
@@ -420,8 +426,9 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
                 } else {
 
-                    tool.deafen( c.find , command.on , command.listener );
+                    tool.deafen( command.find , command.on , command.listener );
                     command.on = null;
+
                     resolve( command , false );
 
                 }
@@ -494,7 +501,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
         var hasCreate = "create" in command
         , hasElements = "find" in command;
 
-        if ( hasElements && command.find.length > 1 && command.each !== false ) {
+        if ( hasElements && command.find.length > 1 && command.createEach ) {
 
             return command.find.each( function () {
 
@@ -510,7 +517,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         if ( hasElements ) {
 
-            command.inject.nodeCollection = command.find;
+            command.inject.nodeList = command.find;
 
         }
 
@@ -574,7 +581,8 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
             config.load         = node.getAttribute( "data-load" );
             config.debug        = node.getAttribute( "data-debug" );
             config.baseUrl      = node.getAttribute( "data-baseUrl" );
-            config.toolkit      = node.getAttribute( "data-toolkit" );
+            config.toolkit      = ( node.getAttribute( "data-toolkit" ) || config.toolkit ).toUpperCase();
+            config.toolkit      = toolkit[ config.toolkit ];
             config.toolkitUrl   = node.getAttribute( "data-jqueryUrl" );
 
             if ( !config.toolkitUrl ) {

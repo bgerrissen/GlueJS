@@ -4,21 +4,19 @@ define( {
 
         if ( this.$elements && this.$elements.length ) {
 
-            console.log( "setNodeCollection injected a jQuery collection" );
+            this.$elements.css( "background-color" , "red" ).text( "node dependency sorted." );
 
         }
 
-        console.log( this );
-
         if ( config ) {
 
-            console.log( "config received" );
+            //console.log( "config received" );
 
         }
 
         if ( this.dependency ) {
 
-            console.log( "HAS INJECTED DEPENDENCY!" );
+            //console.log( "HAS INJECTED DEPENDENCY!" );
 
         }
 
@@ -26,15 +24,18 @@ define( {
 
     },
 
-    setNodeCollection : function ( collection ) {
+    setNodeList : function ( list ) {
 
-        this.$elements = collection;
+        this.$elements = list;
 
     },
 
     speak : function ( msg ) {
 
-        console.log( msg );
+        this.$elements.append( $( "<div>"+msg+"</div>" ).css( {
+            background : "white",
+            margin : "10px"
+        } ) )
 
     }
 
