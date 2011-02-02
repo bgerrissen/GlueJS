@@ -42,6 +42,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
     , queue = []
     , registry = {}
     , shelved = {}
+    , dontShelf = {}
     , reserved = {}
     , onStoreListeners = {}
 
@@ -238,8 +239,16 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         }
 
-        shelved[ command.id ] = command;
         reserved[ command.id ] = true;
+
+        if ( dontShelf[ command.id ] ) {
+
+            resolve( command , true );
+
+        }
+
+        shelved[ command.id ] = command;
+
 
     }
 
@@ -250,13 +259,25 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
             resolve( shelved[ id ] , true );
             delete shelved[ id ];
 
+        } else {
+
+            dontShelf[ id ] = true;
+
         }
 
     }
 
     function store( id , obj ) {
 
+        if ( registry[ id ] ) {
 
+            throw "Key '" + key + "' already defined in registry."
+
+        }
+
+        registry[ id ] = obj;
+
+        fireOnStore( id , obj );
 
     }
 
@@ -280,11 +301,29 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     }
 
-    function fetch( command , map , key , id ) {
+    function fireOnStore( id , obj ) {
+
+        var list = onStoreListeners[ id ] , i , len;
+
+        if ( !list ) {
+
+            return;
+
+        }
+
+        while( list.length ) {
+
+            list.pop()( obj );
+
+        }
+
+    }
+
+    function fetch( command , key , id ) {
 
         onStore( id , function( obj ) {
 
-            map[ key ] = obj;
+            command.set[ key ] = obj;
             checkDependencies( command );
 
         } );
@@ -338,6 +377,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
             return getDependencies( command , false );
 
         }
+
 
         // everything should be loaded at this point.
 
@@ -432,25 +472,29 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
                 }
 
-                checkDependencies( command , map );
+                checkDependencies( command );
 
             } );
+
+        } else {
+
+            command.dependenciesComplete = true;
 
         }
 
     }
 
-    function checkDependencies( command , map ) {
+    function checkDependencies( command ) {
 
-        for ( key in map ) {
+        for ( key in command.set ) {
 
-            if ( !map.hasOwnProperty( key ) || typeof map[ key ] != "string" ) {
+            if ( !command.set.hasOwnProperty( key ) || typeof command.set[ key ] != "string" ) {
 
                 continue;
 
             }
 
-            if ( typeof map[ key ] == "string" ) {
+            if ( typeof command.set[ key ] == "string" ) {
 
                 return;
 
@@ -464,6 +508,9 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
     }
 
     function inject( obj , map ) {
+
+        console.log( map );
+        console.log( obj );
 
         var key , setterName;
 
@@ -491,7 +538,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     }
 
-    function createInstance( obj , map , args , command ) {
+    function createInstance( obj , command ) {
 
         var newObj;
 
@@ -511,11 +558,11 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         }
 
-        inject( newObj , map );
+        inject( newObj , command.set );
 
         if ( typeof newObj.constructor == "function" ) {
 
-            newObj.constructor.apply( newObj , args );
+            newObj.constructor.apply( newObj , command.create );
 
         }
 
@@ -529,7 +576,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
         
         if ( command.create ) {
 
-            obj = createInstance( obj , command.set , command.create , command );
+            obj = createInstance( obj , command );
 
         }
 
@@ -541,7 +588,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         command.isExecuted = true;
 
-        console.log( obj )
+        //console.log( obj )
 
     }
 
