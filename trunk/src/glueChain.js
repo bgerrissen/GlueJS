@@ -37,11 +37,13 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
 (function( global , doc , undefined ){
 
-    var config = {}
-
-    , currentCommand
+    var currentCommand
     , commandTimeout
     , queue = []
+    , registry = {}
+    , shelved = {}
+    , reserved = {}
+    , onStoreListeners = {}
 
     , isBrowser = !!doc
     , isDomReady
@@ -54,15 +56,155 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
     , slice = Array.prototype.slice
     , toString = Object.prototype.toString
 
+    , toolkit = {
+
+        JQUERY : "jquery",
+        PROTOTYPE : "prototype",
+        MOOTOOLS : "mootools",
+        DOJO : "dojo"
+
+    }
+
+    , config = {
+
+        toolkit : toolkit.JQUERY,
+        baseUrlMatch : /(?:\\|\/)glue(?:[^\\\/]+)?\.js/
+
+    }
+
+    , toolkitUrl = {
+
+        jquery : "https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js",
+        prototype : "https://ajax.googleapis.com/ajax/libs/prototype/1.7.0.0/prototype.js",
+        mootools : "https://ajax.googleapis.com/ajax/libs/mootools/1.3.0/mootools-yui-compressed.js",
+        dojo : "https://ajax.googleapis.com/ajax/libs/dojo/1.5/dojo/dojo.xd.js"
+
+    }
+
+    , adapter = {
+        jquery : {
+            find : function ( expr ) {
+                return jQuery( expr );
+            },
+            node : function( node ){
+                return jQuery( node );
+            },
+            listen : function ( obj , eventType , listener ) {
+                return obj.bind( eventType , listener );
+            },
+            deafen : function ( obj , eventType , listener ) {
+                return obj.unbind( eventType , listener );
+            }
+        },
+        prototype : {
+            find : function ( expr ) {
+                return $$( expr );
+            },
+            node : function ( node ) {
+                return [ node ];
+            },
+            listen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    $A( obj ).invoke( "observe" , evt , listener );
+                } );
+                return obj;
+            },
+            deafen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    $A( obj ).invoke( "stopObserving" , evt , listener );
+                } );
+                return obj;
+            }
+        },
+        mootools : {
+            find : function ( expr ) {
+                return $$( expr );
+            },
+            node : function ( node ) {
+                return $$( node );
+            },
+            listen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    obj.addEvent( evt , listener );
+                } );
+                return obj;
+            },
+            deafen : function ( obj , eventType , listener ) {
+                eventType.split( /\s+/ ).each( function ( evt ) {
+                    obj.removeEvent( evt , listener );
+                } );
+                return obj;
+            }
+        },
+        dojo : {
+            find : function ( expr ) {
+                return dojo.query( expr );
+            },
+            node : function ( obj ) {
+                return new dojo.NodeList( obj );
+            },
+            listen : function ( obj , eventType , listener ) {
+                dojo.forEach( eventType.split( /\s+/ ) , function ( evt ) {
+                    obj.forEach( function ( node ) {
+                        dojo.connect( node , evt , listener );
+                    } );
+                } );
+            },
+            deafen : function ( obj , eventType , listener ) {
+                dojo.forEach( eventType.split( /\s+/ ) , function ( evt ) {
+                    obj.forEach( function ( node ) {
+                        dojo.disconnect( [ node , evt , listener , 1 ] );
+                    } );
+                } );
+            }
+        }
+    }
+
+    , clone = ( "__proto__" in {} ) ? function ( obj , newProperties ) {
+
+        obj = {
+            __proto__ : obj
+        };
+
+        return newProperties ? inject( obj , newProperties ) : obj;
+
+    } : function ( obj , newProperties ) {
+
+        function Empty(){}
+        Empty.prototype = obj;
+        obj = new Empty;
+
+        return newProperties ? inject( obj , newProperties ) : obj;
+
+    }
+
     ;
 
     function type( obj ) {
 
-        return toString.call( obj ).replace( /^\[\s?object|\]$/g , "" ).toLowerCase();
+        return toString.call( obj ).replace( /^\[\s*object\s*|\]$/g , "" ).toLowerCase();
 
     }
 
-    function getToolkit() {}
+    function getToolkit() {
+
+        if ( !config.toolkitUrl ) {
+
+            throw "No CDN present for " + config.toolkit + ", requires manual 'data-toolkitUrl' setting on script tag.";
+
+        }
+
+        isToolkitLoading = true;
+
+        require( [].concat( config.toolkitUrl ) , function () {
+
+            tool = adapter[ config.toolkit ];
+            isToolkitLoaded = true;
+            handleQueue();
+
+        } );
+
+    }
 
     function register() {
 
@@ -80,11 +222,326 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         } else if ( currentCommand ) {
 
-            resolve( currentCommand );
+            resolve( currentCommand , false );
 
         }
         
         currentCommand = null;
+
+    }
+
+    function shelf( command ) {
+
+        if ( reserved[ command.id ] ) {
+
+            throw "ID '" + command.id + "' is already reserved.";
+
+        }
+
+        shelved[ command.id ] = command;
+        reserved[ command.id ] = true;
+
+    }
+
+    function unshelf( id ) {
+
+        if ( shelved[ id ] ) {
+
+            resolve( shelved[ id ] , true );
+            delete shelved[ id ];
+
+        }
+
+    }
+
+    function store( id , obj ) {
+
+
+
+    }
+
+    function onStore( id , callback ) {
+
+        if ( registry[ id ] ) {
+
+            return callback( registry[ id ] );
+
+        }
+
+        if ( !onStoreListeners[ id ] ) {
+
+            onStoreListeners[ id ] = [];
+
+        }
+
+        onStoreListeners[ id ].push( callback );
+
+        unshelf( id );
+
+    }
+
+    function fetch( command , map , key , id ) {
+
+        onStore( id , function( obj ) {
+
+            map[ key ] = obj;
+            checkDependencies( command );
+
+        } );
+
+    }
+
+    function handleQueue() {
+
+        var com;
+
+        while ( com = queue.pop() ) {
+
+            resolve( com , false );
+
+        }
+
+    }
+
+    function resolve( command , notLazy ) {
+
+        if ( command.when ) {
+
+            return resolve.when( command );
+
+        }
+
+        if ( !notLazy && command.id ) {
+
+            return shelf( command );
+
+        }
+
+        // when condition(s) are met at this point.
+
+        if ( notLazy && !command.sourceComplete && !command.sourceLoading ) {
+
+            require( [ command.src ] , function ( obj ) {
+
+                command.module = obj;
+                command.sourceComplete = true;
+                resolve( command , true );
+
+            } );
+
+            command.sourceLoading = true;
+
+        }
+
+        if ( notLazy && command.set && !command.dependenciesComplete ) {
+
+            return getDependencies( command , false );
+
+        }
+
+        // everything should be loaded at this point.
+
+        if ( notLazy && !command.isExecuted ) {
+
+            execute( command );
+
+        }
+        
+    }
+
+    resolve.when = function ( command ) {
+
+        if ( command.when.now === true ) {
+
+            command.when = null;
+            return resolve( command , true );
+
+        }
+
+        if ( command.when.find ) {
+
+            return require.ready( function () {
+
+                command.found = tool.find( command.when.find );
+
+                if ( command.found.length ) {
+
+                    command.when.find = null;
+                    resolve.when( command );
+
+                }
+
+            } );
+
+        }
+
+        if ( command.when.event ) {
+
+            command.listener = function () {
+
+                tool.deafen( command.found , command.when.event , command.listener );
+                command.when.event = null;
+                resolve.when( command );
+
+            }
+
+            return tool.listen( command.found , command.when.event , command.listener );
+
+        }
+
+        command.when = null;
+
+        resolve( command , true );
+
+    }
+
+    function getDependencies( command ) {
+
+        var map = command.set , key , keys = [] , values = [];
+
+        for ( key in map ) {
+
+            if ( !map.hasOwnProperty( key ) || typeof map[ key ] != "string" ) {
+
+                continue;
+
+            }
+
+            if ( idReg.test( map[ key ] ) ) {
+
+                fetch( command , map , key , map[ key ].replace( idReg , "" ) );
+
+            } else {
+
+                keys.push( key );
+                values.push( map[ key ] );
+
+            }
+
+        }
+
+        if ( keys.length ) {
+
+            require( values , function () {
+
+                var args = arguments , i = args.length;
+
+                while ( i-- ) {
+
+                    map[ keys[ i ] ] = args[ i ];
+
+                }
+
+                checkDependencies( command , map );
+
+            } );
+
+        }
+
+    }
+
+    function checkDependencies( command , map ) {
+
+        for ( key in map ) {
+
+            if ( !map.hasOwnProperty( key ) || typeof map[ key ] != "string" ) {
+
+                continue;
+
+            }
+
+            if ( typeof map[ key ] == "string" ) {
+
+                return;
+
+            }
+
+        }
+
+        command.dependenciesComplete = true;
+        resolve( command , true );
+
+    }
+
+    function inject( obj , map ) {
+
+        var key , setterName;
+
+        for ( key in map ) {
+
+            if ( !map.hasOwnProperty( key ) ) {
+
+                continue;
+                
+            }
+
+            setterName = "set" + key.replace( /^\w/ , key[ 0 ].toUpperCase() );
+
+            if ( typeof obj[ setterName ] == "function" ) {
+
+                obj[ setterName ]( map[ key ] );
+
+            } else {
+
+                obj[ key ] = map[ key ];
+
+            }
+
+        }
+
+    }
+
+    function createInstance( obj , map , args , command ) {
+
+        var newObj;
+
+        if ( typeof obj == "function" ) {
+
+            newObj = clone( obj.prototype );
+            newObj.constructor = obj
+
+
+        } else if ( type( obj ) == "object" ) {
+
+            newObj = clone( obj );
+
+        } else {
+
+            throw "Module of '" + command.src + "' is not instantiable.";
+
+        }
+
+        inject( newObj , map );
+
+        if ( typeof newObj.constructor == "function" ) {
+
+            newObj.constructor.apply( newObj , args );
+
+        }
+
+        return newObj;
+
+    }
+
+    function execute( command ) {
+
+        var obj = command.module;
+        
+        if ( command.create ) {
+
+            obj = createInstance( obj , command.set , command.create , command );
+
+        }
+
+        if ( command.id ) {
+
+            store( command.id , obj );
+
+        }
+
+        command.isExecuted = true;
+
+        console.log( obj )
 
     }
 
@@ -95,7 +552,11 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
      */
     function glue( src ){
 
-        return CommandAPI( src );
+        if ( typeof src == "string" ) {
+
+            return CommandAPI( src );
+
+        }
 
     }
 
@@ -109,7 +570,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         currentCommand = {
             src : src,
-            set : [],
+            set : {},
             run : []
         };
 
@@ -127,10 +588,7 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
      */
     CommandAPI.set = function( key , value ){
 
-        currentCommand.set.push( {
-            key : key,
-            value : value
-        } );
+        currentCommand.set[ key ] = value;
 
         return CommandAPI;
 
@@ -269,9 +727,59 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
     if ( isBrowser ) {
 
         var scripts = doc.getElementsByTagName( "script" )
-        , i = scripts.length;
+        , i = scripts.length
+        , node , requireConfig = {urlArgs:""};
 
+        while ( i-- ) {
 
+            if ( config.baseUrlMatch.test( scripts[ i ].src ) ) {
+
+                node = scripts[ i ];
+                break;
+
+            }
+
+        }
+
+        if ( node ) {
+
+            config.cacheKey     = node.getAttribute( "data-cacheKey" );
+            config.load         = node.getAttribute( "data-load" );
+            config.debug        = node.getAttribute( "data-debug" );
+            config.baseUrl      = node.getAttribute( "data-baseUrl" );
+            config.toolkit      = ( node.getAttribute( "data-toolkit" ) || config.toolkit ).toUpperCase();
+            config.toolkit      = toolkit[ config.toolkit ];
+            config.toolkitUrl   = node.getAttribute( "data-jqueryUrl" );
+
+            if ( !config.toolkitUrl ) {
+
+                config.toolkitUrl = toolkitUrl[ config.toolkit ];
+
+            }
+
+            if ( config.cacheKey ) {
+
+                requireConfig.urlArgs = "cacheKey=" + config.cacheKey;
+
+            }
+
+            if ( config.debug == "true" ) {
+
+                requireConfig.urlArgs += "-debugmode-" + ( +new Date() );
+
+            }
+
+            requireConfig.baseUrl = config.baseUrl || node.src.split( config.baseUrlMatch )[ 0 ];
+
+            require( requireConfig );
+
+            if ( config.load ) {
+
+                require( config.load.replace( /\s+/g , "" ).split( "," ) );
+
+            }
+
+        }
 
         require.ready( function () {
 

@@ -9,25 +9,19 @@
 </head>
 <body>
 
-    <script src="../src/glueChain.js"></script>
+    <script data-baseUrl="../" src="../src/glueChain.js"></script>
 
     <script>
 
         glue
 
-        ( "source" )
+        ( "test/mock/mock1" )
             .as( "jan" )
-            .set( "var1" , "src" )
-            .set( "var2" , "src" )
-            .when.find( "cssExpr" )
+            .set( "var1" , "test/mock/mock2" )
+            .create()
+            .when.now();
 
-        ( "otherSource" )
-            .as( "piet" )
-            .set( "x" , "y" )
-            .when.find( ".className" )
-            .when.event( "click" , "hover mouseout" );
-
-        console.log( glue._commands );
+        //console.log( glue._commands );
 
     </script>
 
