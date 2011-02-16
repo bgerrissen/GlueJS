@@ -1,28 +1,30 @@
-require({
-    paths : {}
-});
+require( {
 
-glue(
+    urlArgs:+new Date(),
+    baseUrl: "../",
+    paths: {
+        "mock" : "test/mock"
+    }
 
-    { lazy: false, src : "mock/mock2", id : "mock2" },
+}, [ "src/chain" ] , function( glue ){
 
-    { src : "mock/mock1", create : {} , id : "mock1" , inject : {
-        dependency : "#mock2"
-    } },
+    glue
 
-    {
-        find : ".hoverMe",
-        on : "click",
-        src : "#mock1", // require module
-        createEach : true,
-        create : {}, // value passed to constructor method.
-        invoke : [
-            { speak : [ "hello world!" ] },
-            { speak : [ "How are you?" ] },
-            { speak : [ "I am fine thank you, how are you?" ] },
-            { speak : [ "Great thanks for asking." ] }
-        ]
+    ( "mock/mock2" )
+        .as( "mock2" )
 
-    }   
+    ( "mock/mock1" )
+        .as( "mock1" )
+        .set( "dependency" , "@mock2")
 
-);
+    ( "@mock1" )
+        .when.find( ".hoverMe" )
+        .when.event( "click" )
+        .run( "speak" , [ "Hello world!" ] )
+        .run( "speak" , [ "How are you?" ] )
+        .run( "speak" , [ "I am fine thank you, how are you?" ] )
+        .run( "speak" , [ "Great thanks for asking." ] )
+
+    ;
+
+} );

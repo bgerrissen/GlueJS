@@ -18,6 +18,7 @@ define( function(){
     , onStoreListeners = {}
 
     , glueReady
+    , domTool
 
     , idReg = /^@/
 
@@ -42,7 +43,9 @@ define( function(){
     }
 
     , toolkit = {
-        JQUERY : "jquery"
+        JQUERY : "jquery",
+        PROTOTYPE : "prototype",
+        MOOTOOLS : "mootools"
     }
 
     , toolkitConfig = {
@@ -65,6 +68,56 @@ define( function(){
                     return obj.unbind( eventType , listener );
                 }
             }
+        },
+        prototype : {
+            test : function(){
+                return !!window.Prototype;
+            },
+            url : "https://ajax.googleapis.com/ajax/libs/prototype/1.7.0.0/prototype.js",
+            adapter : {
+                find : function ( expr ) {
+                    return $$( expr );
+                },
+                node : function ( node ) {
+                    return [ node ];
+                },
+                listen : function ( obj , eventType , listener ) {
+                    eventType.split( /\s+/ ).each( function ( evt ) {
+                        $A( obj ).invoke( "observe" , evt , listener );
+                    } );
+                    return obj;
+                },
+                deafen : function ( obj , eventType , listener ) {
+                    eventType.split( /\s+/ ).each( function ( evt ) {
+                        $A( obj ).invoke( "stopObserving" , evt , listener );
+                    } );
+                    return obj;
+                }
+            }
+        },
+        mootools : {
+            test : function(){},
+            url : "https://ajax.googleapis.com/ajax/libs/mootools/1.3.0/mootools-yui-compressed.js",
+            adapter : {
+                find : function ( expr ) {
+                    return $$( expr );
+                },
+                node : function ( node ) {
+                    return $$( node );
+                },
+                listen : function ( obj , eventType , listener ) {
+                    eventType.split( /\s+/ ).each( function ( evt ) {
+                        obj.addEvent( evt , listener );
+                    } );
+                    return obj;
+                },
+                deafen : function ( obj , eventType , listener ) {
+                    eventType.split( /\s+/ ).each( function ( evt ) {
+                        obj.removeEvent( evt , listener );
+                    } );
+                    return obj;
+                }
+            }
         }
     }
 
@@ -85,6 +138,18 @@ define( function(){
         this.set = [];
         this.args = [];
         this.run = [];
+
+    }
+
+    function getCommandWhen() {
+
+        if ( !currentCommand.when ) {
+
+            currentCommand.when = {};
+
+        }
+
+        return currentCommand.when;
 
     }
 
@@ -201,11 +266,60 @@ define( function(){
 
     }
 
-    resolve.when = function( command ){
+    if ( require.isBrowser ) {
+
+        resolve.when = function ( command ) {
+
+            if ( command.when.find ) {
+
+                return require.ready( function () {
+
+                    var nodeList = domTool.find( command.when.find );
+
+                    if ( nodeList.length ) {
+
+                        command.set.push( {
+                          nodeList : nodeList
+                        } );
+                        command.nodeList = nodeList;
+                        command.when.find = null;
+                        resolve.when( command );
+
+                    }
+
+                } );
+
+            }
+
+            if ( command.when.event ) {
+
+                command.listener = function () {
+
+                    domTool.deafen( command.nodeList , command.when.event , command.listener );
+                    command.when.event = command.listener = null;
+                    resolve.when( command );
+
+                };
+
+                return domTool.listen( command.nodeList , command.when.event , command.listener );
+
+            }
+
+            command.now = true;
+
+            resolve( command );
+
+        }
+
+    } else {
+
+        resolve.when = function ( command ) {
 
 
 
-    };
+        }
+
+    }
 
     /**Once source is complete, obj.module property will be set.
      *
@@ -472,15 +586,36 @@ define( function(){
 
         return commandBuilder;
 
-    }
+    };
 
-    commandBuilder.on = {
+    commandBuilder.when = {
 
-        find : function () {},
+        find : function ( cssExpr ) {
 
-        http : function () {},
+            getCommandWhen().find = cssExpr;
 
-        event : function () {}
+            return commandBuilder;
+
+        },
+
+        http : function ( urlPattern , method ) {
+            
+            getCommandWhen().http = {
+                pattern : urlPattern,
+                method : ( !require.isBrowser ? method : "get" ) || "get"
+            };
+
+            return commandBuilder;
+
+        },
+
+        event : function ( eventType ) {
+
+            getCommandWhen().event = eventType;
+
+            return commandBuilder;
+
+        }
 
     };
 
@@ -526,7 +661,7 @@ define( function(){
 
             , setup = function(){
 
-                tool = cfg.adapter;
+                domTool = cfg.adapter;
                 glueReady = true;
 
                 while ( queue.length ) {
