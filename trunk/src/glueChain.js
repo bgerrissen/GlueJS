@@ -233,20 +233,6 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
     function shelf( command ) {
 
-        if ( reserved[ command.id ] ) {
-
-            throw "ID '" + command.id + "' is already reserved.";
-
-        }
-
-        reserved[ command.id ] = true;
-
-        if ( dontShelf[ command.id ] ) {
-
-            resolve( command , true );
-
-        }
-
         shelved[ command.id ] = command;
 
 
@@ -313,20 +299,38 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         while( list.length ) {
 
-            list.pop()( obj );
+            list.pop()( id , obj );
 
         }
 
     }
 
-    function fetch( command , key , id ) {
+    function fetch( src , callback ) {
 
-        onStore( id , function( obj ) {
+        console.log( src )
 
-            command.set[ key ] = obj;
-            checkDependencies( command );
+        if ( idReg.test( src ) ) {
 
-        } );
+            onStore( src.replace( idReg , "" ) , function( obj ) {
+
+                console.log( " ON STORE CALLBACK" )
+
+                command.set[ key ] = obj;
+                checkDependencies( command );
+
+            } );
+
+        } else {
+
+            require( [ src ] , function( obj ){
+
+                callback( obj );
+
+            } );
+
+        }
+
+
 
     }
 
@@ -346,44 +350,15 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         if ( command.when ) {
 
-            return resolve.when( command );
+            resolve.when( command );
 
-        }
+        } else if ( !notLazy && !dontShelf[ command.id ] ) {
 
-        if ( !notLazy && command.id ) {
+            shelf( command );
 
-            return shelf( command );
+        } else {
 
-        }
-
-        // when condition(s) are met at this point.
-
-        if ( notLazy && !command.sourceComplete && !command.sourceLoading ) {
-
-            require( [ command.src ] , function ( obj ) {
-
-                command.module = obj;
-                command.sourceComplete = true;
-                resolve( command , true );
-
-            } );
-
-            command.sourceLoading = true;
-
-        }
-
-        if ( notLazy && command.set && !command.dependenciesComplete ) {
-
-            return getDependencies( command , false );
-
-        }
-
-
-        // everything should be loaded at this point.
-
-        if ( notLazy && !command.isExecuted ) {
-
-            execute( command );
+            prepare( command );
 
         }
         
@@ -433,84 +408,51 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         resolve( command , true );
 
-    }
+    };
 
-    function getDependencies( command ) {
+    function prepare( command ) {
 
-        var map = command.set , key , keys = [] , values = [];
+        var key
+        , map = command.set
+        , check = function(){
+
+            if ( --command.resourceCount === 0 ) {
+
+                execute( command );
+
+            }
+
+        };
+
+        if ( typeof command.src == "string" ) {
+
+            fetch( command.src , function( obj ){
+
+                command.module = obj;
+                check();
+
+            });
+
+        }
 
         for ( key in map ) {
 
-            if ( !map.hasOwnProperty( key ) || typeof map[ key ] != "string" ) {
+            if ( map.hasOwnProperty( key ) && typeof map[ key ] == "string" ) {
 
-                continue;
-
-            }
-
-            if ( idReg.test( map[ key ] ) ) {
-
-                fetch( command , map , key , map[ key ].replace( idReg , "" ) );
-
-            } else {
-
-                keys.push( key );
-                values.push( map[ key ] );
+                (function(){
+                    fetch( map[ key ] , function( obj ){
+                        map[ key ] = obj;
+                        check();
+                    });
+                }( key ));
 
             }
 
         }
-
-        if ( keys.length ) {
-
-            require( values , function () {
-
-                var args = arguments , i = args.length;
-
-                while ( i-- ) {
-
-                    map[ keys[ i ] ] = args[ i ];
-
-                }
-
-                checkDependencies( command );
-
-            } );
-
-        } else {
-
-            command.dependenciesComplete = true;
-
-        }
-
-    }
-
-    function checkDependencies( command ) {
-
-        for ( key in command.set ) {
-
-            if ( !command.set.hasOwnProperty( key ) || typeof command.set[ key ] != "string" ) {
-
-                continue;
-
-            }
-
-            if ( typeof command.set[ key ] == "string" ) {
-
-                return;
-
-            }
-
-        }
-
-        command.dependenciesComplete = true;
-        resolve( command , true );
 
     }
 
     function inject( obj , map ) {
-
-        console.log( map );
-        console.log( obj );
 
         var key , setterName;
 
@@ -560,6 +502,10 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         inject( newObj , command.set );
 
+        console.log( "@createInstance after inject()");
+        console.log( command.set );
+        console.log( newObj );
+
         if ( typeof newObj.constructor == "function" ) {
 
             newObj.constructor.apply( newObj , command.create );
@@ -588,7 +534,8 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
 
         command.isExecuted = true;
 
-        //console.log( obj )
+        console.log( "@execute result")
+        console.log( obj )
 
     }
 
@@ -618,10 +565,11 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
         currentCommand = {
             src : src,
             set : {},
-            run : []
+            run : [],
+            resourceCount: typeof src == "string" ? 1 : 0
         };
 
-        commandTimeout = setTimeout( register , 0 );
+        commandTimeout = setTimeout( register , 10 );
 
         return CommandAPI;
 
@@ -635,7 +583,27 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
      */
     CommandAPI.set = function( key , value ){
 
-        currentCommand.set[ key ] = value;
+        var k;
+
+        if ( typeof key == "string" ) {
+
+            currentCommand.set[ key ] = value;
+            currentCommand.resourceCount++;
+
+        } else if ( type( key ) == "object" ) {
+
+            for ( k in key ) {
+
+                if ( key.hasOwnProperty( k ) ) {
+
+                    currentCommand.set[ k ] = key[ k ];
+                    currentCommand.resourceCount++;
+
+                }
+
+            }
+
+        }
 
         return CommandAPI;
 
@@ -670,7 +638,16 @@ h.pageLoaded);if(self===self.top)aa=setInterval(function(){try{if(document.body)
      */
     CommandAPI.as = function( id ){
 
-        currentCommand.id = id;
+        if ( !reserved[ id ] ) {
+
+            currentCommand.id = id;
+            reserved[ id ] = true;
+
+        } else {
+
+            throw "ID '" + command.id + "' is already reserved.";
+
+        }
 
         return CommandAPI;
 

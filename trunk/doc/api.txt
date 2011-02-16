@@ -1,0 +1,69 @@
+glue( source )
+
+    @return {function} CommandAPI
+
+    Initializes a new Command builder for source.
+
+.args( arg1 , arg2 )
+
+    @return {function} CommandAPI
+
+    Uses these arguments when constructing source module.
+
+.as( ID )
+
+    @ID {string} unique name
+
+    @return {function} CommandAPI
+
+    Store created instance as ID.
+    ID needs to be unique, an error will be thrown if ID is already used/reserved.
+
+.set( name , source )
+
+    @name {string} property or method name to be used.
+    @source {string} Resource path or ID of instance stored by glue using .as() method.
+
+    @return {function} CommandAPI
+
+    Inject instance of source as name using .setName method or as direct .name property.
+    This happens after instance is created but before constructor is invoked.
+
+
+.now()
+
+    Ignore environment conditions (if any) and create an instance now (asap).
+
+.when.find( cssExpression )
+
+    @return {function} CommandAPI
+
+    Create instance when DOM contains elements that match cssExpression.
+    Found nodeList gets set as .nodeList or by using instance's setNodeList method.
+
+.when.event()
+
+    @return {function} CommandAPI
+
+    Create instance when event is fired on found DOM elements.
+    Happens only once.
+
+.when.http( pattern , method )
+
+    @pattern {string or regExp} URL mapping
+    @method {string} GET or POST
+
+    @return {function} CommandAPI
+
+    Create instance when request URL matches pattern.
+    request object gets set as .request property or by using instance's .setRequest (preferred) method.
+    response object gets set as .response property or by using instance's .setResponse (preferred) method.
+
+    Note: POST data is not available client side.
+
+
+
+
+
+
+
