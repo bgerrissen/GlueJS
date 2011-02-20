@@ -124,6 +124,8 @@ define( function(){
     // will be set later on if require.isBrowser is true.
     , getToolkit
 
+    , toString = Object.prototype.toString
+
     ;
 
     function type( obj ) {
@@ -138,6 +140,7 @@ define( function(){
         this.set = [];
         this.args = [];
         this.run = [];
+        this.pending = 1;
 
     }
 
@@ -279,7 +282,12 @@ define( function(){
                     if ( nodeList.length ) {
 
                         command.set.push( {
-                          nodeList : nodeList
+
+                            key : "nodeList",
+                            set : "setNodeList",
+                            module : nodeList,
+                            preserve : true
+                            
                         } );
                         command.nodeList = nodeList;
                         command.when.find = null;
@@ -315,7 +323,7 @@ define( function(){
 
         resolve.when = function ( command ) {
 
-
+            // todo: ponder server side.
 
         }
 
@@ -380,14 +388,14 @@ define( function(){
         console.log( "@assemble" );
         console.log( command );
 
-        var pending = 1 + command.set.length
-        , i = command.set.length
+        var i = command.set.length
         , received = function(){
 
             console.log( "@received" );
-            console.log( pending - 1 )
+            console.log( command.pending - 1 )
+            console.log( command );
 
-            if ( --pending === 0 ) {
+            if ( --command.pending === 0 ) {
 
                 execute( command );
 
@@ -413,7 +421,7 @@ define( function(){
 
         console.log( "@inject" );
         console.log( obj );
-        console.log( list );
+        console.log( [].concat( list ) );
 
         var c,o;
 
@@ -472,16 +480,48 @@ define( function(){
 
     }
 
+    function invoke( obj , run ) {
+
+        console.log( run )
+
+        var i = 0
+        , len = run.length
+        , methodName
+        , args;
+
+        for ( i ; i < len ; i++ ) {
+
+            methodName = run[ i ].method;
+
+            if ( typeof obj[ methodName ] == "function" ) {
+
+                args = run[ i ].args;
+
+                obj[ methodName ].apply( obj , args );
+
+            }
+
+        }
+
+    }
+
     function execute( command ) {
 
         var instance = createInstance( command.module , command.set , command.args );
 
         console.log( "@execute" );
+        console.log( command );
         console.log( instance );
 
         if ( command.id ) {
 
             store( command.id , instance );
+
+        }
+
+        if ( command.run.length ) {
+
+            invoke( instance , command.run );
 
         }
 
@@ -534,16 +574,21 @@ define( function(){
 
     commandBuilder.set = function ( key , value ) {
 
+        var isValueString = typeof value == "string";
+
         if ( typeof key == "string" && value ) {
 
             currentCommand.set.push( {
 
                 key : key,
                 set : "set" + key.replace( /^\w/ , key[ 0 ].toUpperCase() ),
-                src : value,
-                preserve : typeof value == "string" &&  idReg.test( value )
+                src : isValueString ? value : null,
+                module : isValueString ? null : value,
+                preserve : isValueString && idReg.test( value )
 
             } );
+
+            currentCommand.pending += isValueString ? 1 : 0;
 
         }
 
@@ -553,12 +598,12 @@ define( function(){
 
     commandBuilder.run = function ( method , args ) {
 
-        if ( typeof key == "string" && value ) {
+        if ( typeof method == "string" ) {
 
             currentCommand.run.push( {
 
                 method : method,
-                args : [].concat( args )
+                args : args ? [].concat( args ) : []
 
             } );
 

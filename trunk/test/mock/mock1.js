@@ -10,13 +10,13 @@ define( {
 
         if ( config ) {
 
-            //console.log( "config received" );
+            console.log( "config received" );
 
         }
 
         if ( this.dependency ) {
 
-            //console.log( "HAS INJECTED DEPENDENCY!" );
+            console.log( "HAS INJECTED DEPENDENCY!" );
 
         }
 

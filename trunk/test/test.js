@@ -15,11 +15,12 @@ require( {
 
     ( "mock/mock1" )
         .as( "mock1" )
-        .set( "dependency" , "@mock2")
+        .set( "dependency" , "@mock2" )
 
     ( "@mock1" )
         .when.find( ".hoverMe" )
         .when.event( "click" )
+        .set( "foo" , {foo:"bar"} )
         .run( "speak" , [ "Hello world!" ] )
         .run( "speak" , [ "How are you?" ] )
         .run( "speak" , [ "I am fine thank you, how are you?" ] )
