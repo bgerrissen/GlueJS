@@ -1,22 +1,76 @@
-<!DOCTYPE html>
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
-
-    <meta charset="utf-8"/>
-
     <title></title>
 
-    <script data-main="test.js" src="../src/require.js"></script>
-
+    <script>
+        var require = {
+            urlArgs: +new Date,
+            deps: ["../src/glue","test"]
+        };
     </script>
+    <script data-main="test.js" src="../src/lib/require.js"></script>
+
+    <style>
+        body {font-family:Arial, Verdana, sans-serif;font-size:12px;}
+        div {padding:2px 4px;border:1px solid #eee;margin:1px;overflow:hidden;clear:left;border-radius:5px;height:14px;position:relative;}
+        span {background:orange;display:block;padding:2px 5px;float:left;border-radius:3px;width:50px;text-align: center;font-weight:bold;margin:3px;}
+        div span {height:11px;width:11px;padding:2px;margin:0 5px 0 0;}
+        div div {margin:2px 0 0 20px;clear:both;font-size:10px;border:0;border-radius: 3px;height:auto;}
+        .pass {background:green;color:white;}
+        .fail {background:red;color:white;}
+        h2 {clear:both;margin:0;padding:0;}
+        p {position:absolute;top:2px;right:2px;margin:0;padding:0;font-size:11px;}
+    </style>
+
+
 
 </head>
 <body>
+    <h2>Legend</h2>
+    <span>pending</span>
+    <span class="pass">passed</span>
+    <span class="fail">failed</span>
 
+    <h2>Results</h2>
+    <div id="testFunctionClass">Instantiates functions<span></span></div>
+    <div id="testObjectClass">Instantiates objects<span></span></div>
+    <div id="testIdRefClassInjection">Set a reference dependency<span></span></div>
+    <div id="testGlueOnEvent">Bind instance to DOM element on event<span></span></div>
+    <div id="testAPIExpires">API should expire after 10ms<span></span></div>
 
+    <script>
 
-    <div class="hoverMe">hover me</div>
-    <div class="hoverMe">hover me</div>
+        // simulate events
+        var testGlueOnEventElement = document.getElementById("testGlueOnEvent");
+        if ( "dispatchEvent" in document ) {
+            var event = document.createEvent("MouseEvents");
+            event.initMouseEvent("mouseover", true, true, window,0, 0, 0, 0, 0, false, false, false, false, 0, null);
+        }
+
+        setTimeout(function(){
+            testGlueOnEventElement.dispatchEvent( event );
+        },100);
+
+    </script>
+
+    <script>
+        // no need to be great code...
+        var divs = document.getElementsByTagName("div");
+        var i = divs.length;
+        while( i-- ) {
+            divs[ i ].onclick = function(){
+                var curStyle = "curentStyle" in this ? this.currentStyle.height : this.style.height;
+                if ( /auto/i.test( curStyle) ) {
+                    this.style.height = "14px";
+                } else {
+                    this.style.height = "auto";
+                }
+            }
+        }
+    </script>
+
 
 </body>
 </html>
