@@ -65,7 +65,14 @@
         return receiver;
     }
 
-    function getInstance( object ){
+
+    /**Creates an instance without running the constructor.
+     * The constructor has to be manually applied.
+     *
+     * @param object (Object or Function) Object or function to be instantiated
+     * @return instance {Object}
+     */
+    function createUninitialisedInstance( object ){
         function fn(){}
         if ( "function" == typeof object ) {
             object.prototype.constructor = object;
@@ -77,6 +84,11 @@
         return new fn();
     }
 
+    /**Validates an ID string, must only be alphanumeric + dash and undescore.
+     *
+     * @param id {String}
+     * @return {*}
+     */
     function validateId( id ) {
         if ( !/^[\w\d\-_]+$/i.test( id ) ) {
             throw "ID; '"+id+"' is invalid, can only be alphanumeric plus '-_'.";
@@ -159,7 +171,16 @@
         return ( element = false );
     }
 
-    function setBound( module, element ){
+    /**Registers an relation between module and DOM element.
+     * A module can only be bound to a DOM element once.
+     *
+     * @param module
+     * @param element
+     */
+    function registerBinding( module, element ){
+        if ( isBound( module, element ) ) {
+            return;
+        }
         domBindings.push({
             module: module,
             element: element
@@ -212,7 +233,7 @@
             if ( this.instance ) {
                 return this.instance;
             }
-            var instance = getInstance( this.module );
+            var instance = createUninitialisedInstance( this.module );
             args = args ? args.concat( this.arguments ) : this.arguments;
 
             // presets
@@ -335,7 +356,7 @@
                 resource.create();
             } else if ( !isBound( resource.module, elementArg[ 0 ] )) {
                 resource.create( elementArg );
-                setBound( resource.module, elementArg[ 0 ] );
+                registerBinding( resource.module, elementArg[ 0 ] );
             }
         }
         if ( resource.pending ) {
@@ -405,7 +426,7 @@
 
     };
 
-    var dom = getInstance( core );
+    var dom = createUninitialisedInstance( core );
 
     function run( domContext ){
         var i = 0;
@@ -552,13 +573,13 @@
         if ( W3C_EVENTS ) {
             dom.listen(doc,"DOMContentLoaded",fn = function(){
                 clearInterval( intervalId );
-                dom.deafen( "DOMContentLoaded", fn );
+                dom.deafen( doc, "DOMContentLoaded", fn );
             },false);
         } else if ( IE_EVENTS ) {
             dom.listen(doc,"readystatechange",fn = function(){
                 if ( /^loade|c/.text(doc.readyState) ){
                     clearInterval( intervalId );
-                    dom.deafen( "DOMContentLoaded", fn );
+                    dom.deafen( doc, "DOMContentLoaded", fn );
                 }
             });
         } else if ( "doScroll" in root ) {
