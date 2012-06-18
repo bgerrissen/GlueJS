@@ -279,7 +279,7 @@
                     continue;
                 }
                 resource = properties[ property ].resource;
-                setMethod = "set" + property[ 0 ].toUpperCase() + property.substr(1);
+                setMethod = "set" + property.substr(0,1).toUpperCase() + property.substr(1);
                 if ( setMethod in instance && "function" == typeof instance[ setMethod ] ) {
                     instance[ setMethod ]( resource.create() );
                 } else {
@@ -369,13 +369,13 @@
     var core = {
 
         find: function( expr, context ) {
-            var found, result = [];
+            var found = [];
             context = context || doc;
-            if ( expr[ 0 ] == "#" ) {
+            if ( /^#/.test( expr ) ) {
                 found = context.getElementById( expr.substr(1) );
                 found = found ? [ found ] : [];
                 return found;
-            } else if ( expr[ 0 ] == ".") {
+            } else if ( /^\./.test( expr ) ) {
                 return core.findByClass( expr.substr( 1 ), context );
             }
         },
@@ -577,7 +577,7 @@
             },false);
         } else if ( IE_EVENTS ) {
             dom.listen(doc,"readystatechange",fn = function(){
-                if ( /^loade|c/.text(doc.readyState) ){
+                if ( /^loade|c/.test(doc.readyState) ){
                     clearInterval( intervalId );
                     dom.deafen( doc, "DOMContentLoaded", fn );
                 }

@@ -15,7 +15,7 @@
     <style>
         body {font-family:Arial, Verdana, sans-serif;font-size:12px;}
         div {padding:2px 4px;border:1px solid #eee;margin:1px;overflow:hidden;clear:left;border-radius:5px;height:14px;position:relative;}
-        span {background:orange;display:block;padding:2px 5px;float:left;border-radius:3px;width:50px;text-align: center;font-weight:bold;margin:3px;}
+        span {background:orange;display:inline-block;padding:2px 5px;border-radius:3px;width:50px;text-align: center;font-weight:bold;margin:3px;}
         div span {height:11px;width:11px;padding:2px;margin:0 5px 0 0;}
         div div {margin:2px 0 0 20px;clear:both;font-size:10px;border:0;border-radius: 3px;height:auto;}
         .pass {background:green;color:white;}
@@ -34,11 +34,11 @@
     <span class="fail">failed</span>
 
     <h2>Results</h2>
-    <div id="testFunctionClass">Instantiates functions<span></span></div>
-    <div id="testObjectClass">Instantiates objects<span></span></div>
-    <div id="testIdRefClassInjection">Set a reference dependency<span></span></div>
-    <div id="testGlueOnEvent">Bind instance to DOM element on event<span></span></div>
-    <div id="testAPIExpires">API should expire after 10ms<span></span></div>
+    <div id="testFunctionClass"><span></span>Instantiates functions</div>
+    <div id="testObjectClass"><span></span>Instantiates objects</div>
+    <div id="testIdRefClassInjection"><span></span>Set a reference dependency</div>
+    <div id="testGlueOnEvent"><span></span>Bind instance to DOM element on event</div>
+    <div id="testAPIExpires"><span></span>API should expire after 10ms</div>
 
     <script>
 
@@ -47,10 +47,17 @@
         if ( "dispatchEvent" in document ) {
             var event = document.createEvent("MouseEvents");
             event.initMouseEvent("mouseover", true, true, window,0, 0, 0, 0, 0, false, false, false, false, 0, null);
+        } else if ( "fireEvent" in document ) {
+            var event = document.createEventObject();
         }
 
         setTimeout(function(){
-            testGlueOnEventElement.dispatchEvent( event );
+            if ( "dispatchEvent" in document ) {
+                testGlueOnEventElement.dispatchEvent( event );
+            } else if ( "fireEvent" in document ) {
+                testGlueOnEventElement.fireEvent( "onmouseover", event );
+            }
+
         },100);
 
     </script>
