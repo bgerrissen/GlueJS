@@ -1,9 +1,3 @@
-define( {
+define(function(){
 
-    constructor : function ( config ) {
-
-        console.log( this.nodeCollection );
-
-    }
-
-} );
+});

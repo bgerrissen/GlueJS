@@ -4,27 +4,34 @@
     <meta charset="utf-8"/>
     <title></title>
 
-    <script src="../src/glue.js"
-            data-debug="true"
-            data-baseUrl="./js"
-            data-load="setup"></script>
 
     <link href="css/style.css" rel="stylesheet">
+
+    <script>
+        require = {
+            urlArgs: +new Date,
+            deps: ["../src/glue.js"],
+            paths: {
+                "glue":"../src/glue"
+            }
+        };
+    </script>
+    <script data-main="js/impl.js" src="../src/lib/require.js"></script>
 
 </head>
 <body>
 
     <div class="addressbook"
-         data-owner="ben">
+         data-owner="bart">
 
-        Click to open Ben's address book.
+        Click to open Bart's address book.
 
     </div>
 
     <div class="addressbook"
-         data-owner="jack">
+         data-owner="lisa">
 
-        Click to open Jack's address book.
+        Click to open Lisa's address book.
 
     </div>
 
