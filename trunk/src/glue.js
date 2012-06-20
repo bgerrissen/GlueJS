@@ -65,7 +65,6 @@
         return receiver;
     }
 
-
     /**Creates an instance without running the constructor.
      * The constructor has to be manually applied.
      *
@@ -459,11 +458,14 @@
     function processEvented( resource ){
         var on = resource.on;
         var i = on.length;
+        var listener;
         while ( i-- ) {
-            dom.listen( doc, on[ i ], function( e ){
+            dom.listen( doc, on[ i ], listener = function( e ){
                 e = e || global.event;
                 var target = e.target || e.srcElement;
-                if ( dom.match( target, resource.cssExpression ) ){
+                if ( !resource.cssExpression ) {
+                    execute( resource, [] );
+                } else if ( dom.match( target, resource.cssExpression ) ){
                     execute( resource, [ target ] );
                 }
             });
@@ -488,11 +490,14 @@
                 resource.arguments = slice.call( arguments );
                 return this;
             },
-            on: function( /* events */){
+            on: function( /* events */ ){
                 resource.on = slice.call( arguments );
                 return this;
             },
             to: function( cssExpression ){
+                if ( resource.singleton ) {
+                    throw ".to() is not compatible with .singleton()";
+                }
                 resource.cssExpression = cssExpression;
                 return this;
             },
@@ -504,6 +509,12 @@
                 return this;
             },
             singleton: function(){
+                if ( !resource.id ) {
+                    throw ".singleton() only applies to glue blueprints with identity ( ie. glue( src, id ) ).";
+                }
+                if ( resource.cssExpression ) {
+                    throw ".singleton() is not compatible with .to()"
+                }
                 resource.singleton = true;
                 return this;
             }
